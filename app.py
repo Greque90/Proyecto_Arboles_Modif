@@ -15,6 +15,17 @@ import geopandas as gpd
 from shapely.geometry import shape
 
 FECHA_DESCARGA = "07/07/2026"
+REPO_URL = "https://github.com/Greque90/Proyecto_Arboles_Modif"
+F_ARB, F_SEG, F_BAR, F_CEN = "arboles.csv", "Seguimiento_Arboles.csv", "barrios_de_la_ciudad.csv", "Densidad_Poblacional.csv"
+_FUENTE = {"txt": ""}
+
+
+def fuente(*archivos):
+    """Fija la fuente que se escribe al pie de cada gráfico que se dibuje a continuación."""
+    _FUENTE["txt"] = (
+        "Fuente: Municipalidad de Corrientes, Portal de datos abiertos ("
+        + ", ".join(archivos) + "). Descarga: " + FECHA_DESCARGA + ". Elaboración propia."
+    )
 MIN_POBLACION_ALERTA = 500
 RIESGO_ALTO = "Con riesgo de caída (alto)"
 
@@ -135,8 +146,8 @@ st.markdown(
 
     <div class="encabezado-app">
         <h1>Arbolado urbano de Corrientes Capital</h1>
-        <p>Fuente: Municipalidad de Corrientes (Aplicación de Arbolado Urbano y portal de datos abiertos)
-        e INDEC, Censo 2010. Descarga: {FECHA_DESCARGA}.</p>
+        <p>Fuente: los cuatro archivos fueron extraídos del Portal de datos abiertos de la
+        Municipalidad de Corrientes. Descarga: {FECHA_DESCARGA}.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -163,6 +174,12 @@ def estilo_oscuro(fig, ax_o_axes):
             leg.get_frame().set_facecolor(PALETA["fondo_secundario"])
             for text in leg.get_texts():
                 text.set_color(PALETA["texto"])
+    if _FUENTE["txt"]:
+        import textwrap
+        renderer = fig.canvas.get_renderer()
+        y0 = min(a.get_tightbbox(renderer).y0 for a in fig.axes) / (fig.dpi * fig.get_figheight())
+        fig.text(0.01, y0 - 0.015, textwrap.fill(_FUENTE["txt"], 100), ha="left", va="top",
+                 fontsize=11, color="#E0F7EA", style="italic")
     return fig
 
 
@@ -483,14 +500,22 @@ with st.sidebar:
         f"- **Polígonos unificados:** {formato_ar(info_carga['n_filas_barrios'] - total_barrios)} (Collantes y Molina Punta)."
     )
     st.caption(f"Descarga de los datos: {FECHA_DESCARGA}")
+    st.link_button("Código en GitHub", REPO_URL, use_container_width=True)
 
-with st.expander("Metodología"):
+with st.expander("Metodología y detalles del proyecto"):
+    st.link_button("Ver el código en GitHub", REPO_URL)
     st.markdown(f"""
-**Fuentes y fechas.** Archivos descargados el {FECHA_DESCARGA}; una descarga nueva puede traer otros números.
-- `arboles.csv`: Aplicación de Arbolado Urbano, Municipalidad de Corrientes. Publicado el 13/03/2024, actualizado el 22/09/2025.
-- `Seguimiento_Arboles.csv`: misma fuente. Publicado el 13/03/2024, actualizado el 13/08/2025.
-- `barrios_de_la_ciudad.csv`: Dirección General de Sistemas de Información Geográfica. Actualizado el 01/10/2025.
-- `Densidad_Poblacional.csv`: Censo 2010 (INDEC) por radio censal, publicado en el portal de datos abiertos. Actualizado el 01/10/2025.
+**Proyecto.** Tablero de la Tecnicatura en Ciencia de Datos e Inteligencia Artificial, Práctica Profesionalizante II (2026).
+Autoras: Dolores Guadalupe Medina y Amalia Graciela Rodríguez. Objetivo: analizar la distribución espacial y el estado del
+arbolado urbano de Corrientes Capital para identificar patrones de plantación por barrio, prácticas de mantenimiento y zonas
+que requieren intervención prioritaria.
+
+**Fuentes y fechas.** Los cuatro archivos fueron extraídos del Portal de datos abiertos de la Municipalidad de Corrientes
+el {FECHA_DESCARGA}; una descarga nueva puede traer otros números.
+- `arboles.csv`: inventario de {formato_ar(total_arboles_catastro)} árboles (Aplicación de Arbolado Urbano). Publicado el 13/03/2024, actualizado el 22/09/2025.
+- `Seguimiento_Arboles.csv`: {formato_ar(len(mantenimiento))} registros de seguimiento, misma fuente. Publicado el 13/03/2024, actualizado el 13/08/2025.
+- `barrios_de_la_ciudad.csv`: delimitación de barrios, Dirección General de Sistemas de Información Geográfica. Actualizado el 01/10/2025.
+- `Densidad_Poblacional.csv`: población por radio censal (datos del Censo 2010 del INDEC publicados en el portal). Actualizado el 01/10/2025.
 
 **Orden de las transformaciones.**
 1. Lectura de los CSV y conversión de fechas.
@@ -512,11 +537,23 @@ with st.expander("Metodología"):
 - *Árboles cada 1.000 habitantes* = árboles del barrio ÷ población estimada × 1.000. La población de cada radio se reparte según la fracción de su área que cae en cada barrio.
 - *Prioridad de plantación*: árboles por ha por debajo de la mediana y habitantes por ha por encima de la mediana, sobre todos los barrios con población estimada. El índice de 0 a 1 (promedio de percentiles) solo ordena.
 
+**Análisis exploratorio y estadístico.**
+- *Zona Norte / Sur*: se divide la ciudad con la latitud del cruce de Av. 3 de Abril y Rioja (−27,472, ajustable en la pestaña).
+- *Riesgo vs. otras variables*: prueba de independencia chi-cuadrado entre `riesgo` y cada variable, sobre la tabla árbol × seguimiento; se considera asociación significativa con p < 0,05.
+- *MCA*: análisis de correspondencias múltiples sobre riesgo, estado de salud, inclinación, ahuecamiento, levantamiento de vereda y fase vital. Las categorías que aparecen juntas en un mismo árbol quedan cerca en el plano, lo que respalda combinar esas señales en un solo índice.
+
 **Supuestos y límites.**
 - La población es del Censo 2010 y se supone uniforme dentro de cada radio: es una aproximación territorial, no el acceso individual al arbolado. Con menos de {MIN_POBLACION_ALERTA} habitantes estimados el cociente es inestable y se marca.
 - La última inspección registrada es del {_ult_txt}: el estado mostrado es el de la última vez que se inspeccionó cada árbol, no necesariamente el de hoy.
 - Quedan fuera {formato_ar(total_arboles_catastro - arboles_geo)} árboles sin polígono y {formato_ar(total_barrios - barrios_con_reg)} barrios sin árboles.
+- La categoría `ahuecamiento` tiene valores inconsistentes en la fuente, lo que debilita su aporte al índice.
 - La prioridad de plantación es una orientación preliminar: antes de plantar hay que verificar veredas, servicios, espacio y especie.
+
+**Código y reproducibilidad.**
+- Repositorio: [{REPO_URL}]({REPO_URL}).
+- Incluye `app.py`, los CSV (fijan la versión de datos con la que se validó el tablero), `requirements.txt`, `README.md` y `METODOLOGIA.md`.
+- Para correrlo: `pip install -r requirements.txt` y luego `streamlit run app.py`. Los CSV se leen desde la raíz del repositorio o se pueden subir desde la barra lateral.
+- Cada gráfico lleva escrita su fuente al pie.
 """)
 
 _por_mes = (
@@ -525,6 +562,7 @@ _por_mes = (
     .resample("MS")
     .size()
 )
+fuente(F_SEG)
 _fig_mes, _ax_mes = plt.subplots(figsize=(10, 3.2))
 _ax_mes.plot(_por_mes.index, _por_mes.values, color=PALETA["verde_neon"], linewidth=2, marker="o", markersize=3)
 _ax_mes.set_title("Registros de seguimiento por mes")
@@ -577,6 +615,7 @@ tabs = st.tabs(
 # TAB 0: EDA general
 # ----------------------------------------------------------
 with tabs[0]:
+    fuente(F_ARB)
     st.subheader("Exploración general del arbolado")
 
     c1, c2 = st.columns(2)
@@ -608,6 +647,7 @@ with tabs[0]:
 # TAB 1: Distribución espacial
 # ----------------------------------------------------------
 with tabs[1]:
+    fuente(F_ARB, F_BAR)
     st.subheader("Distribución espacial del arbolado urbano")
 
     st.markdown("**Densidad de arbolado por barrio (árboles por hectárea)**")
@@ -632,6 +672,7 @@ with tabs[1]:
     st.caption("Barrios en gris: sin superficie registrada o sin árboles del padrón asignados en la selección actual.")
 
     st.markdown("**Mapa de densidad puntual (equivalente al heatmap del notebook)**")
+    fuente(F_ARB)
     fig, ax = plt.subplots(figsize=(8, 7))
     hb = ax.hexbin(arboles_f["lng"], arboles_f["lat"], gridsize=40, cmap="viridis", mincnt=1)
     ax.set_xlabel("Longitud")
@@ -647,6 +688,7 @@ with tabs[1]:
 # TAB 2: Barrios con más árboles
 # ----------------------------------------------------------
 with tabs[2]:
+    fuente(F_ARB, F_BAR)
     st.subheader("¿Qué barrios tienen más árboles plantados?")
 
     top_n = st.slider("Cantidad de barrios a mostrar", 5, 30, 15, key="topn_barrios")
@@ -675,6 +717,7 @@ with tabs[2]:
 # TAB 3: Tipos de mantenimiento
 # ----------------------------------------------------------
 with tabs[3]:
+    fuente(F_SEG, F_ARB)
     st.subheader("¿Qué tipos de mantenimiento aparecen con mayor frecuencia?")
 
     # «Registro de Arbol» es el alta del árbol en el padrón, no una tarea de mantenimiento
@@ -704,6 +747,7 @@ with tabs[3]:
 # TAB 4: Zona Norte / Sur
 # ----------------------------------------------------------
 with tabs[4]:
+    fuente(F_ARB, F_SEG)
     st.subheader("Distribución del arbolado por zona (Norte / Sur)")
     st.caption(
         "Se usa como línea divisoria la latitud del cruce Av. 3 de Abril y Rioja "
@@ -743,6 +787,7 @@ with tabs[4]:
 # TAB 5: Riesgo vs. otras variables (bivariado + chi2)
 # ----------------------------------------------------------
 with tabs[5]:
+    fuente(F_ARB, F_SEG)
     st.subheader("Análisis bivariado: riesgo según otras variables")
 
     variable = st.selectbox(
@@ -781,6 +826,7 @@ with tabs[5]:
 # TAB 6: Necesidad de intervención por barrio
 # ----------------------------------------------------------
 with tabs[6]:
+    fuente(F_ARB, F_SEG, F_BAR)
     st.subheader("¿Hay barrios con mayor necesidad de intervención?")
 
     # --- 1) Estado ACTUAL de cada árbol: último seguimiento por fecha_hora ---
@@ -875,6 +921,7 @@ with tabs[6]:
 # TAB 7: Análisis de Correspondencias Múltiples (MCA)
 # ----------------------------------------------------------
 with tabs[7]:
+    fuente(F_ARB, F_SEG)
     st.subheader("Análisis de Correspondencias Múltiples (MCA)")
     st.caption(
         "Visualiza conjuntamente las variables categóricas relacionadas con el estado y riesgo del arbolado."
@@ -945,6 +992,7 @@ def _shannon(serie_especies):
 
 
 with tabs[8]:
+    fuente(F_ARB, F_SEG, F_BAR)
     st.subheader("Indicadores por barrio")
 
     st.caption(
@@ -1071,6 +1119,7 @@ with tabs[8]:
         "Un barrio con una sola especie dominante es vulnerable a que una plaga específica de esa "
         "especie arrase el arbolado. Mayor índice de Shannon = mayor diversidad."
     )
+    fuente(F_ARB, F_BAR)
     _div = resumen_ind_final.sort_values("diversidad_shannon", ascending=True).head(top_n_ind)
     st.pyplot(
         grafico_ranking_horizontal(
@@ -1099,6 +1148,7 @@ with tabs[8]:
 # TAB 9: Equidad territorial y prioridad de plantación
 # ----------------------------------------------------------
 with tabs[9]:
+    fuente(F_ARB, F_SEG, F_BAR, F_CEN)
     st.subheader("Equidad territorial y prioridad de plantación")
     st.caption(
         "Esta pestaña usa todos los barrios del mapa y no responde al filtro de barrios de la barra lateral. "
