@@ -40,20 +40,25 @@ de este tablero.
 > desde una carpeta personal de Google Drive, no desde una URL pública, así que no hay forma de
 > reconstruir esto desde el código. Antes de publicar el tablero, completar:
 
-- Fecha de descarga de `arboles.csv`: ____
-- Fecha de descarga de `Seguimiento_Arboles.csv`: ____
-- Fecha de descarga de `barrios_de_la_ciudad.csv`: ____
-- URL o dataset de origen de cada uno: ____
+- Fecha de descarga de `arboles.csv`: 07/07/2026
+- Fecha de descarga de `Seguimiento_Arboles.csv`: 07/07/2026
+- Fecha de descarga de `barrios_de_la_ciudad.csv`: 07/07/2026
+- Fecha de descarga de `Densidad_Poblacional.csv`: 27/10/2026
+- URL o dataset de origen de cada uno:
+- https://datos.ciudaddecorrientes.gov.ar/dataset/arbolado-urbano
+- https://datos.ciudaddecorrientes.gov.ar/dataset/mantenimiento-de-arboles
+https://datos.ciudaddecorrientes.gov.ar/dataset/barrios/archivo/a3b229c5-08d8-4ca4-908e-d72b63eb295f
+https://datos.ciudaddecorrientes.gov.ar/dataset/barrios/archivo/fe281850-2a92-4e61-81cd-4db3bb9598f5
 - Filas al momento de esta descarga (para detectar si el dataset cambió en una descarga futura):
   10.286 árboles · 12.597 seguimientos · 140 barrios
 
-## Notebook de análisis (`ArbolesFinal.ipynb`)
+## Notebook de análisis (`ArbolesFinal_indicadores.ipynb`)
 
 El notebook con el análisis exploratorio completo (EDA, cruces bivariados, tests de
 chi-cuadrado, MCA) es un archivo aparte, pensado para correr en Google Colab:
 
 1. Abrir en Colab y montar Google Drive.
-2. Ajustar las rutas de `pd.read_csv(...)` a donde estén los tres CSV en el Drive.
+2. Ajustar las rutas de `pd.read_csv(...)` a donde estén los cuatro CSV en el Drive.
 3. Instalar `prince` si no está disponible (`!pip install prince`, ya incluido en la primera
    celda que lo usa).
 4. Correr todas las celdas en orden — varias celdas de diagnóstico (huérfanos del merge,
@@ -62,7 +67,7 @@ chi-cuadrado, MCA) es un archivo aparte, pensado para correr en Google Colab:
 
 ## Notas para quien reproduzca esto con datos nuevos
 
-- Si los tres CSV se vuelven a descargar, correr primero el notebook: los conteos de
+- Si los cuatro CSV se vuelven a descargar, correr primero el notebook: los conteos de
   `METODOLOGIA.md` (10.286 árboles, 78 casos de riesgo alto, etc.) van a cambiar y hay que
   actualizarlos ahí también.
 - La reparación de `sup_ha` (separador de miles mal puesto) es automática y no debería requerir
