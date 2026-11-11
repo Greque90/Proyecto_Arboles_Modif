@@ -15,6 +15,7 @@ import geopandas as gpd
 from shapely.geometry import shape
 
 FECHA_DESCARGA = "07/07/2026"
+FECHA_DESCARGA_POBLACION = "27/10/2026"
 REPO_URL = "https://github.com/Greque90/Proyecto_Arboles_Modif"
 F_ARB, F_SEG, F_BAR, F_CEN = "arboles.csv", "Seguimiento_Arboles.csv", "barrios_de_la_ciudad.csv", "Densidad_Poblacional.csv"
 _FUENTE = {"txt": ""}
@@ -22,9 +23,12 @@ _FUENTE = {"txt": ""}
 
 def fuente(*archivos):
     """Fija la fuente que se escribe al pie de cada gráfico que se dibuje a continuación."""
+    descarga = FECHA_DESCARGA
+    if F_CEN in archivos:
+        descarga = (FECHA_DESCARGA + " (población: " + FECHA_DESCARGA_POBLACION + ")") if len(archivos) > 1 else FECHA_DESCARGA_POBLACION
     _FUENTE["txt"] = (
         "Fuente: Municipalidad de Corrientes, Portal de datos abiertos ("
-        + ", ".join(archivos) + "). Descarga: " + FECHA_DESCARGA + ". Elaboración propia."
+        + ", ".join(archivos) + "). Descarga: " + descarga + ". Elaboración propia."
     )
 MIN_POBLACION_ALERTA = 500
 RIESGO_ALTO = "Con riesgo de caída (alto)"
@@ -137,7 +141,8 @@ st.markdown(
     div[data-testid="stMetricLabel"] p {{ font-size: 1.3rem !important; }}
     div[data-testid="stMetricDelta"] {{ font-size: 1.2rem !important; }}
     [data-testid="stExpander"] summary p {{ font-size: 1.5rem !important; font-weight: 700; color: {PALETA['amarillo']} !important; }}
-    [data-testid="stAlert"] p {{ font-size: 1.3rem !important; }}
+    [data-testid="stAlert"] p, [data-testid="stAlert"] li, [data-testid="stAlert"] strong {{ font-size: 1.3rem !important; color: #111111 !important; }}
+    div[data-testid="stMetricLabel"], div[data-testid="stMetricLabel"] * {{ white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }}
     div[data-baseweb="select"] * {{ font-size: 1.2rem !important; }}
     section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
     section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] li {{ font-size: 1.2rem; }}
@@ -147,7 +152,7 @@ st.markdown(
     <div class="encabezado-app">
         <h1>Arbolado urbano de Corrientes Capital</h1>
         <p>Fuente: los cuatro archivos fueron extraídos del Portal de datos abiertos de la
-        Municipalidad de Corrientes. Descarga: {FECHA_DESCARGA}.</p>
+        Municipalidad de Corrientes. Descarga: {FECHA_DESCARGA} (árboles, seguimientos y barrios) y {FECHA_DESCARGA_POBLACION} (población).</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -499,7 +504,7 @@ with st.sidebar:
         f"- **Barrios sin árboles:** {formato_ar(total_barrios - barrios_con_reg)}.\n"
         f"- **Polígonos unificados:** {formato_ar(info_carga['n_filas_barrios'] - total_barrios)} (Collantes y Molina Punta)."
     )
-    st.caption(f"Descarga de los datos: {FECHA_DESCARGA}")
+    st.caption(f"Descarga de los datos: {FECHA_DESCARGA}; población: {FECHA_DESCARGA_POBLACION}")
     st.link_button("Código en GitHub", REPO_URL, use_container_width=True)
 
 with st.expander("Metodología y detalles del proyecto"):
@@ -510,8 +515,8 @@ Autoras: Dolores Guadalupe Medina y Amalia Graciela Rodríguez. Objetivo: analiz
 arbolado urbano de Corrientes Capital para identificar patrones de plantación por barrio, prácticas de mantenimiento y zonas
 que requieren intervención prioritaria.
 
-**Fuentes y fechas.** Los cuatro archivos fueron extraídos del Portal de datos abiertos de la Municipalidad de Corrientes
-el {FECHA_DESCARGA}; una descarga nueva puede traer otros números.
+**Fuentes y fechas.** Los cuatro archivos fueron extraídos del Portal de datos abiertos de la Municipalidad de Corrientes:
+árboles, seguimientos y barrios el {FECHA_DESCARGA}, y población el {FECHA_DESCARGA_POBLACION}. Una descarga nueva puede traer otros números.
 - `arboles.csv`: inventario de {formato_ar(total_arboles_catastro)} árboles (Aplicación de Arbolado Urbano). Publicado el 13/03/2024, actualizado el 22/09/2025.
 - `Seguimiento_Arboles.csv`: {formato_ar(len(mantenimiento))} registros de seguimiento, misma fuente. Publicado el 13/03/2024, actualizado el 13/08/2025.
 - `barrios_de_la_ciudad.csv`: delimitación de barrios, Dirección General de Sistemas de Información Geográfica. Actualizado el 01/10/2025.
@@ -535,7 +540,7 @@ el {FECHA_DESCARGA}; una descarga nueva puede traer otros números.
 - *Antigüedad del relevamiento* = hoy − fecha del seguimiento más reciente del barrio.
 - *Diversidad* = índice de Shannon H = −Σ pᵢ·ln(pᵢ), con pᵢ la proporción de cada especie en el barrio.
 - *Árboles cada 1.000 habitantes* = árboles del barrio ÷ población estimada × 1.000. La población de cada radio se reparte según la fracción de su área que cae en cada barrio.
-- *Prioridad de plantación*: árboles por ha por debajo de la mediana y habitantes por ha por encima de la mediana, sobre todos los barrios con población estimada. El índice de 0 a 1 (promedio de percentiles) solo ordena.
+- *Prioridad de plantación*: árboles por ha por debajo de la mediana y habitantes por ha por encima de la mediana, sobre los barrios con árboles registrados y población estimada (los barrios sin árboles quedan fuera). El índice de 0 a 1 (promedio de percentiles) solo ordena.
 
 **Análisis exploratorio y estadístico.**
 - *Zona Norte / Sur*: se divide la ciudad con la latitud del cruce de Av. 3 de Abril y Rioja (−27,472, ajustable en la pestaña).
@@ -547,6 +552,7 @@ el {FECHA_DESCARGA}; una descarga nueva puede traer otros números.
 - La última inspección registrada es del {_ult_txt}: el estado mostrado es el de la última vez que se inspeccionó cada árbol, no necesariamente el de hoy.
 - Quedan fuera {formato_ar(total_arboles_catastro - arboles_geo)} árboles sin polígono y {formato_ar(total_barrios - barrios_con_reg)} barrios sin árboles.
 - La categoría `ahuecamiento` tiene valores inconsistentes en la fuente, lo que debilita su aporte al índice.
+- El padrón está concentrado en pocos barrios: «pocos árboles registrados» no equivale a «pocos árboles». La prioridad de plantación señala sobre todo barrios poco relevados; confirmar con el área municipal qué barrios tienen el relevamiento completo.
 - La prioridad de plantación es una orientación preliminar: antes de plantar hay que verificar veredas, servicios, espacio y especie.
 
 **Código y reproducibilidad.**
@@ -1151,7 +1157,7 @@ with tabs[9]:
     fuente(F_ARB, F_SEG, F_BAR, F_CEN)
     st.subheader("Equidad territorial y prioridad de plantación")
     st.caption(
-        "Esta pestaña usa todos los barrios del mapa y no responde al filtro de barrios de la barra lateral. "
+        "Esta pestaña usa todos los barrios con árboles registrados y no responde al filtro de barrios de la barra lateral. "
         "Población: Censo 2010 repartida por superficie de intersección con los radios censales (estimación)."
     )
     if not file_censo:
@@ -1178,7 +1184,8 @@ with tabs[9]:
             est_all["estado_salud"].isin(["Malo", "Muerto"]).groupby(est_all["nombre_barrio"]).mean() * 100
         ).reindex(pr.index)
 
-        pr_ok = pr.dropna(subset=["arboles_por_ha", "poblacion_por_ha"]).copy()
+        n_sin_arboles = int((pr["total_arboles"] == 0).sum())
+        pr_ok = pr[pr["total_arboles"] > 0].dropna(subset=["arboles_por_ha", "poblacion_por_ha"]).copy()
         med_a, med_p = pr_ok["arboles_por_ha"].median(), pr_ok["poblacion_por_ha"].median()
         pr_ok["indice_prioridad"] = (
             0.5 * (1 - pr_ok["arboles_por_ha"].rank(pct=True)) + 0.5 * pr_ok["poblacion_por_ha"].rank(pct=True)
@@ -1198,8 +1205,17 @@ with tabs[9]:
         c1, c2, c3 = st.columns(3)
         c1.metric("Barrios evaluables", f"{formato_ar(len(pr_ok))} de {formato_ar(len(pr))}")
         c2.metric("Barrios prioritarios", formato_ar(int(pr_ok["prioritario"].sum())))
-        c3.metric("Barrios sin población asignada", formato_ar(int((~con_pob).sum())))
+        c3.metric("Barrios sin árboles registrados", formato_ar(n_sin_arboles))
 
+        top8 = pr["total_arboles"].nlargest(8)
+        st.warning(
+            f"Pocos árboles registrados no es lo mismo que pocos árboles. El {fmt_pct(top8.sum() / pr['total_arboles'].sum() * 100, 0)} "
+            f"de los árboles geolocalizados ({formato_ar(top8.sum())} de {formato_ar(pr['total_arboles'].sum())}) está en 8 barrios; "
+            f"{top8.index[0]} tiene {formato_ar(top8.iloc[0])}, y {formato_ar(int((pr['arboles_por_ha'] < 1).sum()))} de "
+            f"{formato_ar(len(pr))} barrios tienen menos de un árbol registrado por hectárea. Eso se parece más a un relevamiento "
+            "que avanzó por zonas que a una diferencia real de arbolado: la lista de prioridad señala, sobre todo, barrios "
+            "que todavía no fueron relevados."
+        )
         st.markdown("**Prioridad de plantación: baja densidad arbórea y alta densidad poblacional**")
         fig_p, ax_p = plt.subplots(figsize=(9, 6))
         sc = ax_p.scatter(pr_ok["arboles_por_ha"], pr_ok["poblacion_por_ha"], c=pr_ok["indice_prioridad"],
@@ -1209,6 +1225,9 @@ with tabs[9]:
         for nombre, fila in pr_ok[pr_ok["prioritario"]].sort_values("indice_prioridad", ascending=False).head(10).iterrows():
             ax_p.annotate(nombre, (fila["arboles_por_ha"], fila["poblacion_por_ha"]), fontsize=11,
                           color=PALETA["texto"], xytext=(4, 4), textcoords="offset points")
+        for k, (nombre, fila) in enumerate(pr_ok.nlargest(8, "arboles_por_ha").iterrows()):
+            ax_p.annotate(nombre, (fila["arboles_por_ha"], fila["poblacion_por_ha"]), fontsize=11,
+                          color=PALETA["amarillo"], xytext=(6, 8 if k % 2 == 0 else -16), textcoords="offset points")
         ax_p.set_xlabel("Árboles registrados por hectárea")
         ax_p.set_ylabel("Habitantes estimados por hectárea (Censo 2010)")
         ax_p.set_title("Prioridad territorial de plantación")
@@ -1220,12 +1239,13 @@ with tabs[9]:
         st.pyplot(fig_p)
         st.caption(
             f"Líneas punteadas: medianas ({fmt_num(med_a, 2)} árboles/ha y {fmt_num(med_p, 2)} hab./ha). "
-            "Arriba a la izquierda: barrios prioritarios. Se rotulan los 10 con mayor índice."
+            "Arriba a la izquierda: barrios prioritarios (rótulos blancos: los 10 con mayor índice). "
+            "En amarillo: los 8 barrios con más árboles registrados por hectárea, que concentran el padrón."
         )
 
         st.markdown("**Árboles cada 1.000 habitantes**")
         incluir_bajos = st.checkbox(f"Incluir barrios con menos de {MIN_POBLACION_ALERTA} habitantes estimados")
-        h = pr.dropna(subset=["arboles_1000_hab"])
+        h = pr[pr["total_arboles"] > 0].dropna(subset=["arboles_1000_hab"])
         if not incluir_bajos:
             h = h[~h["base_poblacional_baja"]]
         n_h = st.slider("Cantidad de barrios a mostrar", 5, 30, 15, key="topn_1000")
@@ -1236,11 +1256,21 @@ with tabs[9]:
             )
         )
 
+        st.caption(
+            f"Los {formato_ar(n_sin_arboles)} barrios sin árboles registrados quedan fuera de este análisis, igual que en el resto del tablero: "
+            "puede ser falta de relevamiento y no ausencia de arbolado."
+        )
+        pr_ok["poblacion"] = pr_ok["poblacion"].round(0)
         st.markdown("**Lista de barrios prioritarios**")
         lista = pr_ok[pr_ok["prioritario"]].sort_values("indice_prioridad", ascending=False)
         mostrar(lista[["total_arboles", "arboles_por_ha", "poblacion", "poblacion_por_ha", "arboles_1000_hab",
                        "pct_estado_critico", "indice_prioridad", "base_poblacional_baja", "lectura"]])
         st.caption(
-            "Es una orientación preliminar: antes de definir sitios hay que verificar veredas, servicios, "
+            "Conclusión: esta lista orienta dónde relevar y plantar primero, pero no mide un déficit real de arbolado, "
+            "porque el padrón está concentrado en pocos barrios. Antes de definir sitios hay que verificar veredas, servicios, "
             "espacio disponible y especies. Una base poblacional baja hace inestable el cociente por habitante."
         )
+        with st.expander(f"Barrios sin árboles registrados ({formato_ar(n_sin_arboles)}): pendientes de relevamiento"):
+            sin = pr[pr["total_arboles"] == 0].sort_values("poblacion", ascending=False)[["poblacion", "poblacion_por_ha"]]
+            sin["poblacion"] = sin["poblacion"].round(0)
+            mostrar(sin.rename(columns={"poblacion": "Población estimada (2010)", "poblacion_por_ha": "Habitantes por ha"}))
