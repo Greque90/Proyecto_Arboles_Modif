@@ -142,7 +142,7 @@ st.markdown(
     div[data-testid="stMetricDelta"] {{ font-size: 1.2rem !important; }}
     [data-testid="stExpander"] summary p {{ font-size: 1.5rem !important; font-weight: 700; color: {PALETA['amarillo']} !important; }}
     [data-testid="stAlert"] p, [data-testid="stAlert"] li, [data-testid="stAlert"] strong {{ font-size: 1.3rem !important; color: #111111 !important; }}
-    div[data-testid="stMetricLabel"], div[data-testid="stMetricLabel"] * {{ white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }}
+    div[data-testid="stMetricLabel"], div[data-testid="stMetricLabel"] * {{ white-space: normal !important; overflow: visible !important; text-overflow: clip !important; -webkit-line-clamp: unset !important; display: block !important; font-size: 1.15rem !important; }}
     div[data-baseweb="select"] * {{ font-size: 1.2rem !important; }}
     section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
     section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] li {{ font-size: 1.2rem; }}
@@ -595,10 +595,10 @@ arboles_f = arboles[arboles["nombre_barrio"].isin(barrios_sel)]
 df_f = df[df["nombre_barrio"].isin(barrios_sel)]
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Árboles inventariados", formato_ar(len(arboles_f)))
-col2.metric("Especies distintas", f"{arboles_f['especie'].nunique()}")
-col3.metric("Barrios seleccionados", f"{len(barrios_sel)}")
-col4.metric("Registros de mantenimiento", formato_ar(df_f['id_seguimiento'].notna().sum()))
+col1.metric("Árboles", formato_ar(len(arboles_f)))
+col2.metric("Especies", f"{arboles_f['especie'].nunique()}")
+col3.metric("Barrios", f"{len(barrios_sel)}")
+col4.metric("Seguimientos", formato_ar(df_f['id_seguimiento'].notna().sum()))
 
 st.divider()
 
@@ -768,7 +768,7 @@ with tabs[4]:
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("**Cantidad de árboles por zona**")
-        st.pyplot(grafico_ranking_horizontal(df_zona["zona"].value_counts(), PALETA["verde_neon"], "", "Cantidad"))
+        st.pyplot(grafico_ranking_horizontal(df_zona.drop_duplicates("id_arbol")["zona"].value_counts(), PALETA["verde_neon"], "", "Cantidad"))
 
     with c2:
         fig, ax = plt.subplots(figsize=(6, 5))
@@ -926,11 +926,56 @@ with tabs[6]:
 # ----------------------------------------------------------
 # TAB 7: Análisis de Correspondencias Múltiples (MCA)
 # ----------------------------------------------------------
+NOMBRES_VAR_MCA = {
+    "riesgo": "Riesgo", "estado_salud": "Estado de salud", "inclinacion": "Inclinación",
+    "ahuecamiento": "Ahuecamiento", "levantamiento_vereda": "Levantamiento de vereda", "fase_vital": "Fase vital",
+}
+
+
+def _categoria_corta(nombre, n=28):
+    cat = nombre.split("__", 1)[1] if "__" in nombre else nombre
+    return cat if len(cat) <= n else cat[: n - 1] + "…"
+
+
+def grafico_mca(coord, colores):
+    """Puntos coloreados por variable (leyenda) y etiquetas solo con la categoría, repartidas para no pisarse."""
+    fig, ax = plt.subplots(figsize=(13, 10))
+    grupos = {}
+    for nombre in coord.index:
+        grupos.setdefault(nombre.split("__")[0] if "__" in nombre else nombre, []).append(nombre)
+    textos = []
+    for var, nombres in grupos.items():
+        color = colores.get(var, PALETA["texto"])
+        ax.scatter(coord.loc[nombres, 0], coord.loc[nombres, 1], color=color, s=80, edgecolors="white",
+                   linewidths=0.5, label=NOMBRES_VAR_MCA.get(var, var), zorder=3)
+        for nombre in nombres:
+            textos.append(ax.text(coord.loc[nombre, 0], coord.loc[nombre, 1], _categoria_corta(nombre),
+                                  fontsize=12, color=color, zorder=4))
+    ax.axhline(0, color=PALETA["texto"], linestyle="--", alpha=0.4)
+    ax.axvline(0, color=PALETA["texto"], linestyle="--", alpha=0.4)
+    ax.margins(x=0.22, y=0.12)
+    ax.set_xlabel("Dimensión 1")
+    ax.set_ylabel("Dimensión 2")
+    ax.set_title("MCA - Categorías de variables del arbolado")
+    leg = ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0), framealpha=0.85, title="Variable")
+    leg.get_title().set_color(PALETA["texto"])
+    fig.canvas.draw()
+    try:
+        from adjustText import adjust_text
+        adjust_text(textos, ax=ax, expand=(1.6, 2.0), force_text=(0.5, 0.8), force_static=(0.3, 0.5), iter_lim=600,
+                    arrowprops=dict(arrowstyle="-", color="#BBBBBB", lw=0.7))
+    except Exception:
+        for k, tx in enumerate(textos):  # sin adjustText: separa verticalmente de forma alterna
+            x, y = tx.get_position()
+            tx.set_position((x + 0.02, y + (0.04 if k % 2 == 0 else -0.06)))
+    return fig
 with tabs[7]:
     fuente(F_ARB, F_SEG)
     st.subheader("Análisis de Correspondencias Múltiples (MCA)")
     st.caption(
-        "Visualiza conjuntamente las variables categóricas relacionadas con el estado y riesgo del arbolado."
+        "Visualiza conjuntamente las variables categóricas relacionadas con el estado y riesgo del arbolado. "
+        "Cada color es una variable y cada punto una categoría: los puntos cercanos corresponden a categorías "
+        "que suelen aparecer en los mismos árboles."
     )
 
     try:
@@ -958,19 +1003,8 @@ with tabs[7]:
                 "fase_vital": PALETA["naranja"],
             }
 
-            fig, ax = plt.subplots(figsize=(10, 8))
-            for nombre in coord.index:
-                var_base = nombre.split("__")[0] if "__" in nombre else nombre
-                color = colores_mca.get(var_base, PALETA["texto"])
-                ax.scatter(coord.loc[nombre, 0], coord.loc[nombre, 1], color=color, s=70, edgecolors="white", linewidths=0.5)
-                ax.text(coord.loc[nombre, 0] + 0.02, coord.loc[nombre, 1] + 0.02, nombre, fontsize=12, color=PALETA["texto"])
-
-            ax.axhline(0, color=PALETA["texto"], linestyle="--", alpha=0.4)
-            ax.axvline(0, color=PALETA["texto"], linestyle="--", alpha=0.4)
-            ax.set_xlabel("Dimensión 1")
-            ax.set_ylabel("Dimensión 2")
-            ax.set_title("MCA - Categorías de variables del arbolado")
-            estilo_oscuro(fig, ax)
+            fig = grafico_mca(coord, colores_mca)
+            estilo_oscuro(fig, fig.axes[0])
             st.pyplot(fig)
 
             st.markdown("**Autovalores (varianza explicada):**")
@@ -1205,7 +1239,7 @@ with tabs[9]:
         c1, c2, c3 = st.columns(3)
         c1.metric("Barrios evaluables", f"{formato_ar(len(pr_ok))} de {formato_ar(len(pr))}")
         c2.metric("Barrios prioritarios", formato_ar(int(pr_ok["prioritario"].sum())))
-        c3.metric("Barrios sin árboles registrados", formato_ar(n_sin_arboles))
+        c3.metric("Barrios sin árboles", formato_ar(n_sin_arboles))
 
         top8 = pr["total_arboles"].nlargest(8)
         st.warning(
