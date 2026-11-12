@@ -316,62 +316,62 @@ def limites_totales(geometrias):
     return min(xs_min), min(ys_min), max(xs_max), max(ys_max)
 
 
-def dibujar_choropleta(barrios_geo, valores, titulo, etiqueta_barra, cmap_nombre="YlOrRd"):
-    """
-    Dibuja un choropleta de barrios coloreado según 'valores' (Series indexada por nombre_barrio).
-    barrios_geo: DataFrame con columnas 'nombre_barrio' y 'geometry' (shapely).
-    Los barrios sin dato se pintan en gris para que la ausencia sea visible, no invisible.
-    """
-    valores_validos = valores.replace([np.inf, -np.inf], np.nan)
-    if valores_validos.index.duplicated().any():
-        # Salvaguarda: si 'valores' viene con nombres de barrio repetidos, .get() por nombre
-        # devolvería más de un valor y rompe el coloreado. Promediamos por nombre.
-        valores_validos = valores_validos.groupby(level=0).mean()
-    vmin = float(np.nanmin(valores_validos.values)) if valores_validos.notna().any() else 0
-    vmax = float(np.nanmax(valores_validos.values)) if valores_validos.notna().any() else 1
-    if vmin == vmax:
-        vmax = vmin + 1
-    cmap = plt.get_cmap(cmap_nombre)
-    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+def mapa_barrios_interactivo(barrios_geo, densidad, conteo, pct_interv=None, min_arboles=30):
+    """Mapa coroplético sobre OpenStreetMap: al pasar el cursor por un barrio se muestra su nombre,
+    su densidad (árboles por ha) y los árboles registrados. Los barrios sin dato se dibujan en gris."""
+    import plotly.graph_objects as go
+    from shapely.geometry import mapping
 
-    fig, ax = plt.subplots(figsize=(8, 8))
+    b = barrios_geo.drop_duplicates("nombre_barrio")
+    geo = {
+        "type": "FeatureCollection",
+        "features": [
+            {"type": "Feature", "id": fila["nombre_barrio"], "properties": {}, "geometry": mapping(fila["geometry"])}
+            for _, fila in b.iterrows()
+        ],
+    }
+    dens = densidad.replace([np.inf, -np.inf], np.nan)
+    dens = dens[~dens.index.duplicated()].reindex(b["nombre_barrio"])
+    cont = conteo.reindex(b["nombre_barrio"]).fillna(0)
+    con_dato = dens.notna() & (cont > 0)
+    # % que requiere intervención: solo con un mínimo de árboles (si no, el porcentaje es ruido)
+    pct = (pct_interv.reindex(b["nombre_barrio"]) if pct_interv is not None
+           else pd.Series(np.nan, index=b["nombre_barrio"]))
+    pct_txt = pd.Series(
+        [fmt_pct(p) if (pd.notna(p) and c >= min_arboles) else f"sin dato (menos de {min_arboles} árboles)"
+         for p, c in zip(pct, cont)],
+        index=b["nombre_barrio"],
+    )
 
-    for _, fila in barrios_geo.iterrows():
-        nombre = fila["nombre_barrio"]
-        geom = fila["geometry"]
-        valor = valores_validos.get(nombre, np.nan)
-        color = cmap(norm(valor)) if pd.notna(valor) else "#8A8A8A"
-
-        partes = list(geom.geoms) if geom.geom_type == "MultiPolygon" else [geom]
-        for parte in partes:
-            x, y = parte.exterior.xy
-            ax.add_patch(
-                MplPolygon(list(zip(x, y)), closed=True, facecolor=color,
-                           edgecolor=PALETA["texto"], linewidth=0.4, alpha=0.95)
-            )
-            for interior in parte.interiors:
-                xi, yi = interior.xy
-                ax.add_patch(
-                    MplPolygon(list(zip(xi, yi)), closed=True, facecolor=PALETA["fondo"],
-                               edgecolor=PALETA["texto"], linewidth=0.3)
-                )
-
-    minx, miny, maxx, maxy = limites_totales(barrios_geo["geometry"])
-    pad_x, pad_y = (maxx - minx) * 0.03, (maxy - miny) * 0.03
-    ax.set_xlim(minx - pad_x, maxx + pad_x)
-    ax.set_ylim(miny - pad_y, maxy + pad_y)
-    ax.set_aspect("equal")
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_title(titulo)
-
-    sm = ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    cbar = fig.colorbar(sm, ax=ax, label=etiqueta_barra, fraction=0.04, pad=0.02)
-    cbar.ax.yaxis.label.set_color(PALETA["texto"])
-    cbar.ax.tick_params(colors=PALETA["texto"]); cbar.ax.yaxis.set_major_formatter(_formatter_ar(cbar.ax.yaxis))
-
-    estilo_oscuro(fig, ax)
+    Mapa = getattr(go, "Choroplethmap", None) or go.Choroplethmapbox
+    fig = go.Figure()
+    sin = dens.index[~con_dato]
+    if len(sin):
+        fig.add_trace(Mapa(
+            geojson=geo, locations=list(sin), z=[0] * len(sin), showscale=False,
+            colorscale=[[0, "#9A9A9A"], [1, "#9A9A9A"]],
+            marker=dict(opacity=0.45, line=dict(width=0.5, color="#555555")),
+            hovertemplate="<b>%{location}</b><br>Sin árboles registrados<extra></extra>",
+        ))
+    con = dens.index[con_dato]
+    fig.add_trace(Mapa(
+        geojson=geo, locations=list(con), z=dens[con].values, customdata=[[c, p] for c, p in zip(cont[con], pct_txt[con])],
+        colorscale="YlGn", marker=dict(opacity=0.85, line=dict(width=0.6, color="#333333")),
+        colorbar=dict(title=dict(text="Árboles / ha", font=dict(color="#FFFFFF", size=15)),
+                      tickfont=dict(color="#FFFFFF", size=14)),
+        hovertemplate=("<b>%{location}</b><br>Árboles / ha: %{z:,.1f}<br>"
+                       "% que requiere intervención: %{customdata[1]}<br>"
+                       "Árboles registrados: %{customdata[0]:,.0f}<extra></extra>"),
+    ))
+    minx, miny, maxx, maxy = limites_totales(b["geometry"])
+    zoom = float(np.log2(360 * 1.7 / max(maxx - minx, (maxy - miny) * 1.5))) - 0.3
+    base_mapa = dict(style="open-street-map", center=dict(lon=(minx + maxx) / 2, lat=(miny + maxy) / 2), zoom=zoom)
+    clave_mapa = "map" if hasattr(go, "Choroplethmap") else "mapbox"
+    fig.update_layout(
+        **{clave_mapa: base_mapa},
+        height=620, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="rgba(0,0,0,0)", separators=",.",
+        hoverlabel=dict(bgcolor="#0F2118", font=dict(color="#FFFFFF", size=16)),
+    )
     return fig
 
 
@@ -668,14 +668,18 @@ with tabs[1]:
         _conteo_barrio.reindex(_sup_ha.index).fillna(0) / _sup_ha
     ).replace([np.inf, -np.inf], np.nan)
 
-    fig_choro = dibujar_choropleta(
-        barrios,
-        _densidad_barrio,
-        titulo="Árboles por hectárea, por barrio",
-        etiqueta_barra="Árboles / ha",
+    _est_mapa = senales_intervencion(estado_actual(df_f))
+    _pct_interv = _est_mapa.groupby("nombre_barrio")["requiere_intervencion"].mean() * 100
+    st.plotly_chart(
+        mapa_barrios_interactivo(barrios, _densidad_barrio, _conteo_barrio, _pct_interv),
+        use_container_width=True,
     )
-    st.pyplot(fig_choro)
-    st.caption("Barrios en gris: sin superficie registrada o sin árboles del padrón asignados en la selección actual.")
+    st.caption(
+        "Pasá el cursor sobre un barrio para ver su nombre, su densidad, el % de árboles que requiere intervención "
+        "(2 o más señales de deterioro; solo para barrios con 30 o más árboles, porque con menos el porcentaje es ruido) "
+        "y sus árboles registrados. "
+        "Barrios en gris: sin árboles del padrón asignados en la selección actual. " + _FUENTE["txt"] + " Mapa base: © OpenStreetMap contributors."
+    )
 
     st.markdown("**Mapa de densidad puntual (equivalente al heatmap del notebook)**")
     fuente(F_ARB)
